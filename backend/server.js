@@ -11,8 +11,7 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-// 교체 (파일 맨 위에)
-import yahooFinance from 'yahoo-finance2';
+const yahooFinance = require("yahoo-finance2").default;
 const NodeCache = require("node-cache");
 const axios = require("axios");
 const cheerio = require("cheerio");
@@ -346,6 +345,40 @@ const SECTOR_TICKERS = {
 };
 
 // ── 뉴스 ───────────────────────────────────────────────────────
+
+/**
+ * GET /kr-quote/:ticker
+ * 네이버 금융 국장 실시간 주가 프록시 (CORS 우회)
+ */
+app.get("/kr-quote/:ticker", async (req, res) => {
+  const ticker = req.params.ticker;
+  const cacheKey = `krquote_${ticker}`;
+  const cached = priceCache.get(cacheKey);
+  if (cached) return res.json({ ...cached, cached: true });
+  try {
+    const response = await axios.get(
+      `https://polling.finance.naver.com/api/realtime/domestic/stock/${ticker}`,
+      { headers: { "User-Agent": "Mozilla/5.0", "Referer": "https://finance.naver.com" }, timeout: 5000 }
+    );
+    const d = response.data?.datas?.[0];
+    if (!d) return res.status(404).json({ error: "종목 없음" });
+    const isRising = d.compareToPreviousPrice?.code === "2";
+    const data = {
+      ticker,
+      price: d.closePriceRaw,
+      change: isRising ? d.compareToPreviousClosePriceRaw : -d.compareToPreviousClosePriceRaw,
+      changeP: isRising ? parseFloat(d.fluctuationsRatioRaw) : -parseFloat(d.fluctuationsRatioRaw),
+      high: d.highPriceRaw,
+      low: d.lowPriceRaw,
+      mktCap: d.marketValueFullRaw,
+      updatedAt: new Date().toISOString(),
+    };
+    priceCache.set(cacheKey, data);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 /**
  * 네이버 금융 뉴스 검색
