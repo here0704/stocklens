@@ -3,8 +3,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 // ─── 설정 ─────────────────────────────────────────────────────────────────────
 // 배포 시 VITE_API_URL 환경변수에 Railway 서버 주소 입력
 // 예: https://stocklens-backend.up.railway.app
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:4000";
-const USE_MOCK = !import.meta.env.VITE_API_URL; // API URL 있으면 자동으로 실제 연동
+const API_BASE = "https://stocklens-production-3c01.up.railway.app";
+const USE_MOCK = false;
 
 // ─── 메인 네비게이션 (하단 탭바) ──────────────────────────────────────────────
 const NAV = [
