@@ -225,7 +225,30 @@ function genPriceHistory(base, vol, trend, seed = 1) {
   pts[pts.length - 1] = base; return pts;
 }
 
-// Finnhub 심볼 변환 (005930 → 005930.KS)
+// 네이버 금융 API로 국장 실시간 주가 fetch
+async function fetchKRQuote(ticker) {
+  try {
+    const res = await fetch(
+      `https://polling.finance.naver.com/api/realtime/domestic/stock/${ticker}`
+    );
+    const data = await res.json();
+    const d = data.datas?.[0];
+    if (!d) return null;
+    const price = d.closePriceRaw;
+    const prevClose = price - d.compareToPreviousClosePriceRaw;
+    const changeP = d.fluctuationsRatioRaw;
+    const isRising = d.compareToPreviousPrice?.code === "2";
+    return {
+      price: price,
+      change: isRising ? d.compareToPreviousClosePriceRaw : -d.compareToPreviousClosePriceRaw,
+      changeP: isRising ? parseFloat(changeP) : -parseFloat(changeP),
+      high: d.highPriceRaw,
+      low: d.lowPriceRaw,
+      volume: d.accumulatedTradingVolumeRaw,
+      mktCap: d.marketValueFullRaw,
+    };
+  } catch { return null; }
+}
 function toFinnhubSymbol(ticker) {
   if (/^\d{6}$/.test(ticker)) {
     const kosdaq = ["247540","091990","196170","086520","068270","035720","035420"];
@@ -789,19 +812,24 @@ function StockCard({ stock, color, avgPS, watchlist, toggleWatch }) {
   const prices=useRef(genPriceHistory(stock.price,stock.vol,stock.trend,stock.seed)).current;
   const isKR=stock.market==="국장";
 
-  // Finnhub 실시간 주가 fetch
+  // 실시간 주가 fetch (미장: Finnhub, 국장: 네이버 금융)
   useEffect(()=>{
     if(USE_MOCK) return;
-    fetchLiveQuote(stock.ticker).then(d => { if(d) setLivePrice(d); });
+    if(stock.market === "국장") {
+      fetchKRQuote(stock.ticker).then(d => { if(d) setLivePrice(d); });
+    } else {
+      fetchLiveQuote(stock.ticker).then(d => { if(d) setLivePrice(d); });
+    }
   },[stock.ticker]);
 
   const displayPrice = livePrice?.price ?? stock.price;
   const displayChangeP = livePrice?.changeP ?? stock.changeP;
   const displayMktCap = livePrice?.mktCap ?? (isKR ? stock.mktCap * 1e12 : stock.mktCap * 1e9);
 
-  const priceStr=isKR?Math.round(displayPrice).toLocaleString()+"원":"$"+displayPrice.toFixed(2);
+  const priceStr=isKR?Math.round(displayPrice).toLocaleString()+"원":"$"+Number(displayPrice).toFixed(2);
   const mktStr=isKR?(displayMktCap/1e12).toFixed(1)+"조":"$"+(displayMktCap/1e12).toFixed(2)+"T";
   const opStr=isKR?stock.opIncome.toFixed(1)+"조":"$"+stock.opIncome.toFixed(1)+"B";
+  const isLive = !!livePrice;
   const diff=((stock.psRatio-avgPS)/avgPS*100).toFixed(1);
   const isOver=stock.psRatio>avgPS;
   return (
@@ -812,6 +840,7 @@ function StockCard({ stock, color, avgPS, watchlist, toggleWatch }) {
           <div style={{ display:"flex", alignItems:"center", gap:5, marginBottom:3, flexWrap:"wrap" }}>
             <span style={{ fontSize:13, fontWeight:700, color:C.text }}>{stock.name}</span>
             <span style={{ fontSize:10, color:C.textDim, padding:"1px 5px", border:`1px solid ${C.border}`, borderRadius:3 }}>{stock.market}</span>
+            {isLive && <span style={{ fontSize:9, fontWeight:700, padding:"1px 5px", borderRadius:3, background:"rgba(0,212,255,0.12)", color:C.accent, border:"1px solid rgba(0,212,255,0.3)" }}>실시간</span>}
             <Badge val={stock.valuation}/>
           </div>
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
