@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
 // ─── 설정 ─────────────────────────────────────────────────────────────────────
-// 배포 시 VITE_API_URL 환경변수에 Railway 서버 주소 입력
-// 예: https://stocklens-backend.up.railway.app
 const API_BASE = "https://stocklens-production-3c01.up.railway.app";
 const USE_MOCK = false;
 
