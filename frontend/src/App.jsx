@@ -794,6 +794,7 @@ function NewsSection({ ticker, name, color }) {
 function StockCard({ stock, color, avgPS, watchlist, toggleWatch }) {
   const [open,setOpen]=useState(false);
   const [livePrice,setLivePrice]=useState(null);
+  const [dartData,setDartData]=useState(null);
   const prices=useRef(genPriceHistory(stock.price,stock.vol,stock.trend,stock.seed)).current;
   const isKR=stock.market==="국장";
 
@@ -802,6 +803,11 @@ function StockCard({ stock, color, avgPS, watchlist, toggleWatch }) {
     if(USE_MOCK) return;
     if(stock.market === "국장") {
       fetchKRQuote(stock.ticker).then(d => { if(d) setLivePrice(d); });
+      // DART 영업이익 fetch
+      fetch(`${API_BASE}/dart/financials/${stock.ticker}`)
+        .then(r=>r.json())
+        .then(d=>{ if(d.opIncome) setDartData(d); })
+        .catch(()=>{});
     } else {
       fetchLiveQuote(stock.ticker).then(d => { if(d) setLivePrice(d); });
     }
@@ -811,12 +817,25 @@ function StockCard({ stock, color, avgPS, watchlist, toggleWatch }) {
   const displayChangeP = livePrice?.changeP ?? stock.changeP;
   const displayMktCap = livePrice?.mktCap ?? (isKR ? stock.mktCap * 1e12 : stock.mktCap * 1e9);
 
+  // 실시간 영업이익 (DART) / 조 단위
+  const liveOpIncome = dartData?.opIncome ? dartData.opIncome / 1e12 : null;
+  const displayOpIncome = liveOpIncome ?? stock.opIncome;
+
+  // 실시간 psRatio = 시총(원) / 영업이익(원)
+  const livePsRatio = (livePrice?.mktCap && liveOpIncome)
+    ? livePrice.mktCap / (liveOpIncome * 1e12)
+    : stock.psRatio;
+  const displayPsRatio = isKR ? livePsRatio : stock.psRatio;
+
+  // 밸류에이션: 섹터 평균 대비
+  const displayValuation = displayPsRatio > avgPS ? "고평가" : "저평가";
+
   const priceStr=isKR?Math.round(displayPrice).toLocaleString()+"원":"$"+Number(displayPrice).toFixed(2);
   const mktStr=isKR?(displayMktCap/1e12).toFixed(1)+"조":"$"+(displayMktCap/1e12).toFixed(2)+"T";
-  const opStr=isKR?stock.opIncome.toFixed(1)+"조":"$"+stock.opIncome.toFixed(1)+"B";
+  const opStr=isKR?displayOpIncome.toFixed(1)+"조":"$"+displayOpIncome.toFixed(1)+"B";
   const isLive = !!livePrice;
-  const diff=((stock.psRatio-avgPS)/avgPS*100).toFixed(1);
-  const isOver=stock.psRatio>avgPS;
+  const diff=((displayPsRatio-avgPS)/avgPS*100).toFixed(1);
+  const isOver=displayPsRatio>avgPS;
   return (
     <div style={{ background:C.surface, border:`1px solid ${open?color+"40":C.border}`, borderRadius:10, overflow:"hidden", transition:"border-color 0.2s", marginBottom:8 }}>
       <div onClick={()=>setOpen(o=>!o)} style={{ padding:"14px 16px", cursor:"pointer", display:"flex", alignItems:"center", gap:10 }}>
@@ -826,7 +845,7 @@ function StockCard({ stock, color, avgPS, watchlist, toggleWatch }) {
             <span style={{ fontSize:13, fontWeight:700, color:C.text }}>{stock.name}</span>
             <span style={{ fontSize:10, color:C.textDim, padding:"1px 5px", border:`1px solid ${C.border}`, borderRadius:3 }}>{stock.market}</span>
             {isLive && <span style={{ fontSize:9, fontWeight:700, padding:"1px 5px", borderRadius:3, background:"rgba(0,212,255,0.12)", color:C.accent, border:"1px solid rgba(0,212,255,0.3)" }}>실시간</span>}
-            <Badge val={stock.valuation}/>
+            <Badge val={displayValuation}/>
           </div>
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
             <span style={{ fontSize:12, color:C.textMuted }}>{priceStr}</span>
@@ -844,7 +863,7 @@ function StockCard({ stock, color, avgPS, watchlist, toggleWatch }) {
           <ExpandedChart prices={prices}/>
           <div style={{ fontSize:10, color:C.textDim, textAlign:"center", marginBottom:12 }}>30일 주가 추이</div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:14 }}>
-            {[["시가총액",mktStr],["영업이익(연)",opStr],["시총/영업이익",stock.psRatio.toFixed(1)+"x"],["섹터 평균",avgPS.toFixed(1)+"x"]].map(([k,v])=>(
+            {[["시가총액",mktStr],["영업이익(연)",opStr],["시총/영업이익",displayPsRatio.toFixed(1)+"x"],["섹터 평균",avgPS.toFixed(1)+"x"]].map(([k,v])=>(
               <div key={k} style={{ background:C.surfaceAlt, borderRadius:7, padding:"10px 12px" }}>
                 <div style={{ fontSize:10, color:C.textMuted, marginBottom:3 }}>{k}</div>
                 <div style={{ fontSize:13, fontWeight:700, color:C.text }}>{v}</div>
@@ -856,7 +875,7 @@ function StockCard({ stock, color, avgPS, watchlist, toggleWatch }) {
               <span style={{ fontSize:10, color:C.textMuted }}>섹터 내 상대 밸류에이션</span>
               <span style={{ fontSize:10, color:C.textMuted }}>평균 {avgPS.toFixed(1)}x</span>
             </div>
-            <PSBar value={stock.psRatio} avg={avgPS} color={color}/>
+            <PSBar value={displayPsRatio} avg={avgPS} color={color}/>
           </div>
           <NewsSection ticker={stock.ticker} name={stock.name} color={color}/>
         </div>
