@@ -1,20 +1,21 @@
 {
-  "name": "stocklens-backend",
+  "name": "stocklens-server",
   "version": "1.0.0",
+  "description": "StockLens 주가/뉴스 프록시 서버",
   "main": "server.js",
-  "engines": {
-    "node": ">=20.0.0"
-  },
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
     "cors": "^2.8.5",
-    "yahoo-finance2": "3.3.2",
+    "yahoo-finance2": "^2.11.3",
     "node-cache": "^5.1.2",
     "dotenv": "^16.3.1",
     "axios": "^1.6.0",
-    "cheerio": "^1.0.0"
+    "cheerio": "^1.0.0",
+    "adm-zip": "^0.5.10",
+    "xml2js": "^0.6.2"
   }
 }
