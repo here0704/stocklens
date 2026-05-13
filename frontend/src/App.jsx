@@ -706,10 +706,25 @@ function NewsSection({ ticker, name, color }) {
 
 function StockCard({ stock, color, avgPS, watchlist, toggleWatch }) {
   const [open,setOpen]=useState(false);
+  const [livePrice,setLivePrice]=useState(null);
   const prices=useRef(genPriceHistory(stock.price,stock.vol,stock.trend,stock.seed)).current;
   const isKR=stock.market==="국장";
-  const priceStr=isKR?stock.price.toLocaleString()+"원":"$"+stock.price.toFixed(2);
-  const mktStr=isKR?stock.mktCap.toFixed(1)+"조":"$"+(stock.mktCap/1000).toFixed(2)+"T";
+
+  // 실시간 주가 fetch
+  useEffect(()=>{
+    if(USE_MOCK)return;
+    fetch(`${API_BASE}/quote/${stock.ticker}`)
+      .then(r=>r.json())
+      .then(d=>{ if(d.price) setLivePrice(d); })
+      .catch(()=>{});
+  },[stock.ticker]);
+
+  const displayPrice = livePrice?.price ?? stock.price;
+  const displayChangeP = livePrice?.changeP ?? stock.changeP;
+  const displayMktCap = livePrice?.mktCap ?? (isKR ? stock.mktCap * 1e12 : stock.mktCap * 1e9);
+
+  const priceStr=isKR?Math.round(displayPrice).toLocaleString()+"원":"$"+displayPrice.toFixed(2);
+  const mktStr=isKR?(displayMktCap/1e12).toFixed(1)+"조":"$"+(displayMktCap/1e12).toFixed(2)+"T";
   const opStr=isKR?stock.opIncome.toFixed(1)+"조":"$"+stock.opIncome.toFixed(1)+"B";
   const diff=((stock.psRatio-avgPS)/avgPS*100).toFixed(1);
   const isOver=stock.psRatio>avgPS;
@@ -725,7 +740,7 @@ function StockCard({ stock, color, avgPS, watchlist, toggleWatch }) {
           </div>
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
             <span style={{ fontSize:12, color:C.textMuted }}>{priceStr}</span>
-            <Chip changeP={stock.changeP}/>
+            <Chip changeP={displayChangeP}/>
           </div>
         </div>
         <MiniChart prices={prices} color={color}/>
@@ -737,7 +752,7 @@ function StockCard({ stock, color, avgPS, watchlist, toggleWatch }) {
       {open&&(
         <div style={{ padding:"0 16px 16px", borderTop:`1px solid ${C.border}` }}>
           <ExpandedChart prices={prices}/>
-          <div style={{ fontSize:10, color:C.textDim, textAlign:"center", marginBottom:12 }}>30일 주가 추이 (모의 데이터)</div>
+          <div style={{ fontSize:10, color:C.textDim, textAlign:"center", marginBottom:12 }}>30일 주가 추이</div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:14 }}>
             {[["시가총액",mktStr],["영업이익(연)",opStr],["시총/영업이익",stock.psRatio.toFixed(1)+"x"],["섹터 평균",avgPS.toFixed(1)+"x"]].map(([k,v])=>(
               <div key={k} style={{ background:C.surfaceAlt, borderRadius:7, padding:"10px 12px" }}>
