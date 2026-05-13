@@ -421,10 +421,36 @@ function NewsFeed() {
   const [article, setArticle] = useState(null);
   const [aiSummaries, setAiSummaries] = useState({});
   const [aiLoading, setAiLoading] = useState({});
+  const [liveFeed, setLiveFeed] = useState(null);
 
-  const feedItems = feedTab === "all"
-    ? ALL_FEED
-    : (MOCK_FEED[feedTab] || []);
+  useEffect(() => {
+    if (USE_MOCK) return;
+    setLiveFeed(null);
+    const query = feedTab === "all" ? "주식 증시" : (SECTORS.find(s=>s.id===feedTab)?.label || "주식");
+    fetch(`${API_BASE}/news/search?q=${encodeURIComponent(query)}&display=10`)
+      .then(r => r.json())
+      .then(data => {
+        const items = (data.items || []).map((item, i) => ({
+          id: `live_${i}`,
+          ticker: "",
+          stockName: "",
+          sectorId: feedTab === "all" ? "ai" : feedTab,
+          title: item.title,
+          press: item.press,
+          time: item.pubDate,
+          url: item.url,
+          summary: item.description,
+          priceMove: 0,
+          impact: "positive",
+        }));
+        setLiveFeed(items);
+      })
+      .catch(() => setLiveFeed(null));
+  }, [feedTab]);
+
+  const feedItems = USE_MOCK
+    ? (feedTab === "all" ? ALL_FEED : (MOCK_FEED[feedTab] || []))
+    : (liveFeed || (feedTab === "all" ? ALL_FEED : (MOCK_FEED[feedTab] || [])));
 
   const callQuickAI = async (e, item) => {
     e.stopPropagation();
@@ -645,10 +671,34 @@ function NewsSection({ ticker, name, color }) {
 
   useEffect(() => {
     setNews(null);
-    setTimeout(() => {
-      const items = MOCK_FEED[sectorId]?.filter(n => n.ticker===ticker) || [];
-      setNews(items.length ? items : (MOCK_FEED[sectorId]?.slice(0,2) || []));
-    }, 400);
+    if (USE_MOCK) {
+      setTimeout(() => {
+        const items = MOCK_FEED[sectorId]?.filter(n => n.ticker===ticker) || [];
+        setNews(items.length ? items : (MOCK_FEED[sectorId]?.slice(0,2) || []));
+      }, 400);
+    } else {
+      fetch(`${API_BASE}/news/ticker/${ticker}`)
+        .then(r => r.json())
+        .then(data => {
+          const items = (data.items || []).map(item => ({
+            title: item.title,
+            press: item.press,
+            time: item.pubDate,
+            url: item.url,
+            summary: item.description,
+            priceMove: 0,
+            impact: "positive",
+            sectorId,
+            stockName: name,
+            ticker,
+          }));
+          setNews(items.length ? items : (MOCK_FEED[sectorId]?.slice(0,2) || []));
+        })
+        .catch(() => {
+          const items = MOCK_FEED[sectorId]?.filter(n => n.ticker===ticker) || [];
+          setNews(items.length ? items : (MOCK_FEED[sectorId]?.slice(0,2) || []));
+        });
+    }
   }, [ticker]);
 
   const callAI = async (idx, item) => {
