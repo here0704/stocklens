@@ -24,11 +24,7 @@ const priceCache = new NodeCache({ stdTTL: 300 });       // 5분
 const fundamentalCache = new NodeCache({ stdTTL: 86400 }); // 24시간
 const newsCache = new NodeCache({ stdTTL: 600 });         // 10분
 
-app.use(cors({
-  origin: "*",
-  methods: ["GET", "POST", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
-}));
+app.use(cors());
 app.use(express.json());
 
 // ── 헬퍼 ───────────────────────────────────────────────────────
@@ -73,21 +69,19 @@ app.get("/quote/:ticker", async (req, res) => {
   if (cached) return res.json({ ...cached, cached: true });
 
   try {
-    const q = await yahooFinance.quote(ticker);
+    const q = await yahooFinance.quoteSummary(ticker, { modules: ["price"] });
+    const p = q.price;
     const isKR = ticker.endsWith(".KS") || ticker.endsWith(".KQ");
     const data = {
       ticker: raw,
-      name: q.longName || q.shortName || raw,
-      price: q.regularMarketPrice,
-      change: q.regularMarketChange,
-      changeP: q.regularMarketChangePercent,
-      mktCap: q.marketCap,           // 원화 or USD
-      currency: q.currency,
+      name: p.longName || p.shortName || raw,
+      price: p.regularMarketPrice?.raw ?? p.regularMarketPrice,
+      change: p.regularMarketChange?.raw ?? p.regularMarketChange,
+      changeP: p.regularMarketChangePercent?.raw ?? p.regularMarketChangePercent,
+      mktCap: p.marketCap?.raw ?? p.marketCap,
+      currency: p.currency,
       market: isKR ? "국장" : "미장",
-      fiftyTwoWeekHigh: q.fiftyTwoWeekHigh,
-      fiftyTwoWeekLow: q.fiftyTwoWeekLow,
-      volume: q.regularMarketVolume,
-      avgVolume: q.averageDailyVolume3Month,
+      volume: p.regularMarketVolume?.raw ?? p.regularMarketVolume,
       updatedAt: new Date().toISOString(),
     };
     priceCache.set(cacheKey, data);
@@ -190,15 +184,16 @@ app.get("/batch", async (req, res) => {
       const cached = priceCache.get(cacheKey);
       if (cached) return { ...cached, cached: true };
 
-      const q = await yahooFinance.quote(ticker);
+      const q = await yahooFinance.quoteSummary(ticker, { modules: ["price"] });
+      const p = q.price;
       const isKR = ticker.endsWith(".KS") || ticker.endsWith(".KQ");
       const data = {
         ticker: raw,
-        price: q.regularMarketPrice,
-        change: q.regularMarketChange,
-        changeP: q.regularMarketChangePercent,
-        mktCap: q.marketCap,
-        currency: q.currency,
+        price: p.regularMarketPrice?.raw ?? p.regularMarketPrice,
+        change: p.regularMarketChange?.raw ?? p.regularMarketChange,
+        changeP: p.regularMarketChangePercent?.raw ?? p.regularMarketChangePercent,
+        mktCap: p.marketCap?.raw ?? p.marketCap,
+        currency: p.currency,
         market: isKR ? "국장" : "미장",
         updatedAt: new Date().toISOString(),
       };
