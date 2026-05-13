@@ -11,7 +11,8 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const yahooFinance = require("yahoo-finance2");
+// 교체 (파일 맨 위에)
+import yahooFinance from 'yahoo-finance2';
 const NodeCache = require("node-cache");
 const axios = require("axios");
 const cheerio = require("cheerio");
