@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
 // ─── 설정 ─────────────────────────────────────────────────────────────────────
-const API_BASE = "https://stocklens-production-3c01.up.railway.app";
+const API_BASE = "https://stocklens-u81v.onrender.com";
 const USE_MOCK = false;
 
 // ─── 메인 네비게이션 (하단 탭바) ──────────────────────────────────────────────
