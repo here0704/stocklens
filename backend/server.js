@@ -346,6 +346,66 @@ const SECTOR_TICKERS = {
 
 // ── 뉴스 ───────────────────────────────────────────────────────
 
+const DART_KEY = process.env.DART_KEY || "6bd36145db1a88fbee15483d7ca0f08daddfc614";
+
+/**
+ * GET /dart/financials/:ticker
+ * DART에서 국장 종목 최근 영업이익 가져오기
+ * 시총/영업이익 비율(psRatio) 실시간 계산용
+ */
+app.get("/dart/financials/:ticker", async (req, res) => {
+  const ticker = req.params.ticker;
+  const cacheKey = `dart_${ticker}`;
+  const cached = fundamentalCache.get(cacheKey);
+  if (cached) return res.json({ ...cached, cached: true });
+
+  try {
+    // 1. 종목코드로 corp_code 조회
+    const corpRes = await axios.get("https://opendart.fss.or.kr/api/company.json", {
+      params: { crtfc_key: DART_KEY, stock_code: ticker },
+      timeout: 8000,
+    });
+    const corpCode = corpRes.data?.corp_code;
+    if (!corpCode) return res.status(404).json({ error: "기업 없음" });
+
+    // 2. 최근 연간 재무제표에서 영업이익 조회
+    const year = new Date().getFullYear();
+    let opIncome = null;
+
+    for (const bsnsYear of [year - 1, year - 2]) {
+      try {
+        const finRes = await axios.get("https://opendart.fss.or.kr/api/fnlttSinglAcnt.json", {
+          params: {
+            crtfc_key: DART_KEY,
+            corp_code: corpCode,
+            bsns_year: String(bsnsYear),
+            reprt_code: "11011", // 사업보고서
+          },
+          timeout: 8000,
+        });
+
+        const items = finRes.data?.list || [];
+        // 연결재무제표 영업이익 찾기
+        const opItem = items.find(i =>
+          i.account_nm?.includes("영업이익") &&
+          i.fs_div === "CFS" // 연결재무제표
+        ) || items.find(i => i.account_nm?.includes("영업이익"));
+
+        if (opItem?.thstrm_amount) {
+          opIncome = parseInt(opItem.thstrm_amount.replace(/,/g, ""), 10);
+          break;
+        }
+      } catch { continue; }
+    }
+
+    const data = { ticker, corpCode, opIncome, updatedAt: new Date().toISOString() };
+    fundamentalCache.set(cacheKey, data);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 /**
  * GET /kr-quote/:ticker
  * 네이버 금융 국장 실시간 주가 프록시 (CORS 우회)
