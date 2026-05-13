@@ -347,31 +347,40 @@ const SECTOR_TICKERS = {
 // ── 뉴스 ───────────────────────────────────────────────────────
 
 const DART_KEY = process.env.DART_KEY || "6bd36145db1a88fbee15483d7ca0f08daddfc614";
+const AdmZip = require("adm-zip");
+const { parseStringPromise } = require("xml2js");
 
-// corp_code 캐시 (종목코드 → DART corp_code 매핑)
-const corpCodeCache = {};
+// corp_code 매핑 테이블 (종목코드 → corp_code)
+const corpCodeMap = {};
+let corpCodeLoaded = false;
 
-async function getCorpCode(stockCode) {
-  if (corpCodeCache[stockCode]) return corpCodeCache[stockCode];
+async function loadCorpCodes() {
   try {
-    // DART 기업검색 API (stock_code 파라미터)
-    const res = await axios.get("https://opendart.fss.or.kr/api/company.json", {
-      params: { crtfc_key: DART_KEY, stock_code: stockCode },
-      timeout: 8000,
-    });
-    // status 000이면 성공
-    if (res.data?.status === "000" && res.data?.corp_code) {
-      corpCodeCache[stockCode] = res.data.corp_code;
-      return res.data.corp_code;
+    console.log("DART 기업코드 로딩 중...");
+    const res = await axios.get(
+      `https://opendart.fss.or.kr/api/corpCode.xml?crtfc_key=${DART_KEY}`,
+      { responseType: "arraybuffer", timeout: 30000 }
+    );
+    const zip = new AdmZip(Buffer.from(res.data));
+    const xmlEntry = zip.getEntries().find(e => e.entryName.endsWith(".xml"));
+    if (!xmlEntry) throw new Error("XML 파일 없음");
+    const xml = xmlEntry.getData().toString("utf8");
+    const parsed = await parseStringPromise(xml);
+    const corps = parsed?.result?.list || [];
+    for (const c of corps) {
+      const stockCode = c.stock_code?.[0]?.trim();
+      const corpCode = c.corp_code?.[0]?.trim();
+      if (stockCode && corpCode && stockCode.length === 6) {
+        corpCodeMap[stockCode] = corpCode;
+      }
     }
-    // 검색 API로 폴백
-    const searchRes = await axios.get("https://opendart.fss.or.kr/api/corpCode.json", {
-      params: { crtfc_key: DART_KEY, corp_name: "" },
-      timeout: 8000,
-    });
-    return null;
-  } catch { return null; }
+    corpCodeLoaded = true;
+    console.log(`DART 기업코드 로딩 완료: ${Object.keys(corpCodeMap).length}개`);
+  } catch (err) {
+    console.error("DART 기업코드 로딩 실패:", err.message);
+  }
 }
+loadCorpCodes();
 
 /**
  * GET /dart/financials/:ticker
@@ -384,7 +393,8 @@ app.get("/dart/financials/:ticker", async (req, res) => {
   if (cached) return res.json({ ...cached, cached: true });
 
   try {
-    const corpCode = await getCorpCode(ticker);
+    if (!corpCodeLoaded) return res.status(503).json({ error: "기업코드 로딩 중, 잠시 후 재시도" });
+    const corpCode = corpCodeMap[ticker];
     if (!corpCode) return res.status(404).json({ error: "기업 없음", ticker });
 
     const year = new Date().getFullYear();
