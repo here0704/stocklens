@@ -24,7 +24,11 @@ const priceCache = new NodeCache({ stdTTL: 300 });       // 5분
 const fundamentalCache = new NodeCache({ stdTTL: 86400 }); // 24시간
 const newsCache = new NodeCache({ stdTTL: 600 });         // 10분
 
-app.use(cors());
+app.use(cors({
+  origin: "*",
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
 app.use(express.json());
 
 // ── 헬퍼 ───────────────────────────────────────────────────────
