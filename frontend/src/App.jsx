@@ -225,28 +225,13 @@ function genPriceHistory(base, vol, trend, seed = 1) {
   pts[pts.length - 1] = base; return pts;
 }
 
-// 네이버 금융 API로 국장 실시간 주가 fetch
+// 네이버 금융 API로 국장 실시간 주가 fetch (Render 서버 프록시)
 async function fetchKRQuote(ticker) {
   try {
-    const res = await fetch(
-      `https://polling.finance.naver.com/api/realtime/domestic/stock/${ticker}`
-    );
-    const data = await res.json();
-    const d = data.datas?.[0];
-    if (!d) return null;
-    const price = d.closePriceRaw;
-    const prevClose = price - d.compareToPreviousClosePriceRaw;
-    const changeP = d.fluctuationsRatioRaw;
-    const isRising = d.compareToPreviousPrice?.code === "2";
-    return {
-      price: price,
-      change: isRising ? d.compareToPreviousClosePriceRaw : -d.compareToPreviousClosePriceRaw,
-      changeP: isRising ? parseFloat(changeP) : -parseFloat(changeP),
-      high: d.highPriceRaw,
-      low: d.lowPriceRaw,
-      volume: d.accumulatedTradingVolumeRaw,
-      mktCap: d.marketValueFullRaw,
-    };
+    const res = await fetch(`${API_BASE}/kr-quote/${ticker}`);
+    const d = await res.json();
+    if (!d.price) return null;
+    return d;
   } catch { return null; }
 }
 function toFinnhubSymbol(ticker) {
