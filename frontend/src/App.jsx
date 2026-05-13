@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 
 // ─── 설정 ─────────────────────────────────────────────────────────────────────
 const API_BASE = "https://stocklens-u81v.onrender.com";
+const FINNHUB_KEY = "d82317hr01qrojfdqkogd82317hr01qrojfdqkp0";
+const FINNHUB = "https://finnhub.io/api/v1";
 const USE_MOCK = false;
 
 // ─── 메인 네비게이션 (하단 탭바) ──────────────────────────────────────────────
@@ -221,6 +223,33 @@ function genPriceHistory(base, vol, trend, seed = 1) {
   const pts = []; let p = base * (0.85 + lcg() * 0.1);
   for (let i = 0; i < 30; i++) { p = p * (1 + trend / 30 + (lcg() - 0.5) * vol); pts.push(+p.toFixed(2)); }
   pts[pts.length - 1] = base; return pts;
+}
+
+// Finnhub 심볼 변환 (005930 → 005930.KS)
+function toFinnhubSymbol(ticker) {
+  if (/^\d{6}$/.test(ticker)) {
+    const kosdaq = ["247540","091990","196170","086520","068270","035720","035420"];
+    return kosdaq.includes(ticker) ? `${ticker}.KQ` : `${ticker}.KS`;
+  }
+  return ticker;
+}
+
+// Finnhub 실시간 주가 fetch
+async function fetchLiveQuote(ticker) {
+  try {
+    const symbol = toFinnhubSymbol(ticker);
+    const res = await fetch(`${FINNHUB}/quote?symbol=${symbol}&token=${FINNHUB_KEY}`);
+    const data = await res.json();
+    if (!data.c) return null; // c = current price
+    return {
+      price: data.c,
+      change: data.d,       // d = change
+      changeP: data.dp,     // dp = percent change
+      high: data.h,
+      low: data.l,
+      prevClose: data.pc,
+    };
+  } catch { return null; }
 }
 
 async function fetchArticleBody(url) {
@@ -760,13 +789,10 @@ function StockCard({ stock, color, avgPS, watchlist, toggleWatch }) {
   const prices=useRef(genPriceHistory(stock.price,stock.vol,stock.trend,stock.seed)).current;
   const isKR=stock.market==="국장";
 
-  // 실시간 주가 fetch
+  // Finnhub 실시간 주가 fetch
   useEffect(()=>{
-    if(USE_MOCK)return;
-    fetch(`${API_BASE}/quote/${stock.ticker}`)
-      .then(r=>r.json())
-      .then(d=>{ if(d.price) setLivePrice(d); })
-      .catch(()=>{});
+    if(USE_MOCK) return;
+    fetchLiveQuote(stock.ticker).then(d => { if(d) setLivePrice(d); });
   },[stock.ticker]);
 
   const displayPrice = livePrice?.price ?? stock.price;
